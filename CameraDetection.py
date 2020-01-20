@@ -32,13 +32,13 @@ model_input_size = (48,48)
 report_emotion = []
 report_time = []
 
-video_source = 'webcam'   ## OPTIONS 'webcam' and 'video_file'
-file_name = 'AIClassAugmentation'
+video_source = 'video_file'   ## OPTIONS 'webcam' and 'video_file'
+file_name = 'outputShort'
 video_path = './TestVideos/%s.mp4'%file_name # if video_file is selected
 detect_emotion = True
 apply_filter = False
 display_roi = False
-save_procesed_video = False
+save_procesed_video = True
 
 emotion_classifier = load_model(emotion_model_path, compile=False)
 EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]  #for Xception in FER-DB####
@@ -47,16 +47,18 @@ EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"
 ###['angry', 'disgust', 'fear', 'happiness', 'sadness', 'surprise']
 
 #####
-
+frame_size = ()
 if video_source == 'webcam':
     #starting video streaming
     print("[INFO] starting video stream...")
     video_capture = VideoStream(src=0).start()
+    frame_size = np.shape(video_capture.read())
     time.sleep(2.0)
 elif video_source == 'video_file':
     # recognition form video file
     print("[INFO] starting video file thread...")
     video_capture = FileVideoStream(video_path).start()
+    frame_size = np.shape(video_capture.read())
     time.sleep(2.0)
 #
 # class EmotionReport():
@@ -74,8 +76,8 @@ elif video_source == 'video_file':
 #         plt.plot(self.emotions, self.time)
 
 if save_procesed_video:
-    out = cv2.VideoWriter('./processed_videos/%s_processed.avi'%file_name, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (594, 250)) #'M', 'J', 'P', 'G'
-
+    out = cv2.VideoWriter('./processed_videos/%s_processed.avi'%file_name, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (int(frame_size[1]*(0.33+1)), frame_size[0])) #'M', 'J', 'P', 'G'
+# print(int(frame_size[1]*(0.33+1)), frame_size[0])
 def preprocess_input(x, v2=True, f=False):
     x = x.astype('float32')
 
@@ -114,15 +116,15 @@ while True:
     if video_capture.stopped:
         break
     # reading the frame
-    # print(np.shape(frame))
-    width, height, _ = np.shape(frame)
-    frame = imutils.resize(frame, height=height)
+
+    height, width, _ = np.shape(frame)
+    # frame = imutils.resize(frame, height=height)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     try: faces = detector.CNN_face_detection(frame, 0.7)
     except ValueError: faces = []; pass
 
-    canvas = np.zeros((height, int(width/1.5), 3), dtype="uint8")
+    canvas = np.zeros((height, int(width*0.33), 3), dtype="uint8")
 
     frameClone = frame.copy()
 
@@ -206,12 +208,13 @@ while True:
 
                 for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
                     # construct the label text
+                    delta_h = int(height/7)
                     text = "{}: {}%".format(emotion, int(prob * 100))
                     w = int(prob * 300)
-                    cv2.rectangle(canvas, (7, (i * 70) + 20),
-                                  (w, (i * 70) + 65), (0, 0, 255), -1)
-                    cv2.putText(canvas, text, (10, (i * 70) + 55),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.5,
+                    cv2.rectangle(canvas, (7, i*delta_h+2),
+                                  (w, delta_h*(i+1)), (0, 0, 255), -1)
+                    cv2.putText(canvas, text,  (7, i*delta_h+55),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1,
                                 (255, 255, 255), 2)
                     cv2.putText(frameClone, label, (x, y - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
@@ -220,11 +223,13 @@ while True:
     fps.stop()
 
     procesed = np.hstack((frameClone, canvas))
+    print(np.shape(procesed))
 
     if save_procesed_video: out.write(procesed)
 
-    resized = cv2.resize(procesed, (1870,1030))
-    cv2.imshow('procesed', resized)
+    # resized = cv2.resize(procesed, (1870,1030))
+    cv2.imshow('procesed', procesed)
+    # print(np.shape(procesed))
     # cv2.imshow('your_face', frameClone)
     # cv2.imshow("your_emotions", canvas)
 
