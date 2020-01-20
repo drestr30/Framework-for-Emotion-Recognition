@@ -1,0 +1,5 @@
+TestVideos/
+processed_videos/
+env/
+.idea/
+__pycache__/
