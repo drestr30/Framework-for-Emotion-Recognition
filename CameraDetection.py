@@ -32,13 +32,14 @@ model_input_size = (48,48)
 report_emotion = []
 report_time = []
 
-video_source = 'video_file'   ## OPTIONS 'webcam' and 'video_file'
-file_name = 'outputShort'
+video_source = 'webcam'   ## OPTIONS 'webcam' and 'video_file'
+file_name = 'EvaluationSession'
 video_path = './TestVideos/%s.mp4'%file_name # if video_file is selected
 detect_emotion = True
+show_processing = True
 apply_filter = False
 display_roi = False
-save_procesed_video = True
+save_processed_video = False
 
 emotion_classifier = load_model(emotion_model_path, compile=False)
 EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]  #for Xception in FER-DB####
@@ -60,24 +61,10 @@ elif video_source == 'video_file':
     video_capture = FileVideoStream(video_path).start()
     frame_size = np.shape(video_capture.read())
     time.sleep(2.0)
-#
-# class EmotionReport():
-#
-#     def __init__(self):
-#         self.emotions = []
-#         self.time = []
-#
-#     def add2report(self, emotion):
-#         self.emotions.append(emotion)
-#         fps.stop()
-#         self.time.append(fps.elapsed())
-#
-#     def plot_report(self):
-#         plt.plot(self.emotions, self.time)
 
-if save_procesed_video:
+if save_processed_video:
     out = cv2.VideoWriter('./processed_videos/%s_processed.avi'%file_name, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (int(frame_size[1]*(0.33+1)), frame_size[0])) #'M', 'J', 'P', 'G'
-# print(int(frame_size[1]*(0.33+1)), frame_size[0])
+
 def preprocess_input(x, v2=True, f=False):
     x = x.astype('float32')
 
@@ -225,10 +212,10 @@ while True:
     procesed = np.hstack((frameClone, canvas))
     print(np.shape(procesed))
 
-    if save_procesed_video: out.write(procesed)
+    if save_processed_video: out.write(procesed)
 
     # resized = cv2.resize(procesed, (1870,1030))
-    cv2.imshow('procesed', procesed)
+    if show_processing: cv2.imshow('procesed', procesed)
     # print(np.shape(procesed))
     # cv2.imshow('your_face', frameClone)
     # cv2.imshow("your_emotions", canvas)
