@@ -235,11 +235,21 @@ video_capture.stop()
 # cv2.destroyAllWindows()
 time.sleep(1.0)
 
+
+from matplotlib.cm import get_cmap
+colors = ['b', 'r', 'y', 'g', 'purple',' ']
+cmap = get_cmap("jet")
 emotion_array= np.asarray(report_emotion)
+time_array = np.asanyarray(report_time)
 # sns.heatmap(np.transpose(emotion_array), yticklabels=EMOTIONS, xticklabels=False)
-plt.show()
 # plt.hea(report_time, report_emotion)
 # plt.show()
+
+plt.imshow(emotion_array, vmin=0, vmax=max(len(colors), 6),
+          cmap=cmap, interpolation="nearest", aspect="auto")
+plt.show()
+
+
 
 
 
