@@ -10,10 +10,81 @@ from detection import Detection
 import time
 import Filtro
 import matplotlib.pyplot as plt
-# import keyboard
-# import seaborn as sns
+from matplotlib.colors import ColorConverter,LinearSegmentedColormap
+import matplotlib.patches as mpatches
+from matplotlib.ticker import FormatStrFormatter
+import seaborn as sns
+from ffprobe import FFProbe
 
-global  start_time, vertices, emotion_report
+def generate_emotion_report(emotions_map, principal_emotions, time):
+
+    cc = ColorConverter()
+    EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral", 'NaN']
+
+    colors_dict = {'crimson' : cc.to_rgb('#DC143C'),
+                    'lime' : cc.to_rgb('#00FF00'),
+                    'plum' : cc.to_rgb('#BA55D3'),
+                    'yellow' : cc.to_rgb('#FFFF00'),
+                    'cornblue':cc.to_rgb("#6495ED")}
+
+    color_emotion = {'angry': colors_dict['crimson'],
+                     'disgust': colors_dict['lime'],
+                     'scare': colors_dict['plum'],
+                     'happy': 'yellow',
+                     'sad' : colors_dict['cornblue'],
+                     'surprise': 'fuchsia',
+                     'neutral': 'lightgray',
+                     'Nan': 'k'}
+
+    colors =[color_emotion['angry'],
+             color_emotion['disgust'],
+             color_emotion['scare'],
+             color_emotion['happy'],
+             color_emotion['sad'],
+             color_emotion['surprise'],
+             color_emotion['neutral'],
+             color_emotion['Nan']]
+
+    cmap = LinearSegmentedColormap.from_list('emotions', colors)
+
+    affectogram = np.expand_dims(principal_emotions, axis=0)
+
+    fig = plt.figure()
+    gs = fig.add_gridspec(3, 3)
+
+    fig1 = fig.add_subplot(gs[0,:])
+    fig1.set_title('Emotion Affectogram')
+    fig1.get_yaxis().set_visible(False)
+    fig1.set_xticks(np.linspace(0,len(principal_emotions), 20))
+    fig1.set_xticklabels(['%.1f'%t for t in np.linspace(0,time, 20)], rotation=60)
+    fig1.set_xlabel('Time')
+    im = plt.imshow(affectogram, vmin=0, vmax=7, cmap= cmap, interpolation="nearest", aspect="auto")
+
+    values = [0,1,2,3,4,5,6,7]
+    colors = [ im.cmap(im.norm(value)) for value in values]
+    patches = [ mpatches.Patch(color=colors[i], label=EMOTIONS[i] ) for i in range(len(values)) ]
+    plt.legend(handles=patches, loc=9, mode ='expand', ncol= 8)#, borderaxespad=0. ) #bbox_to_anchor=(1.05, 1),
+
+
+    fig2 = fig.add_subplot(gs[1:,:-1])
+    fig2.set_title('Emotion activation Heatmap')
+    sns.heatmap(np.transpose(emotions_map), xticklabels=False)
+    fig2.set_yticklabels(EMOTIONS, rotation=30)
+    fig2.set_xticks(np.linspace(0, len(principal_emotions), 10))
+    fig2.set_xticklabels(['%.1f' % t for t in np.linspace(0, time, 10)], rotation=60)
+    fig2.set_xlabel('Time')
+
+    fig3 = fig.add_subplot(gs[1:,-1])
+    fig3.set_title('Expressions overview')
+    unique_items, counts = np.unique(affectogram, return_counts=True)
+    plt.bar(unique_items, counts)
+    fig3.set_xticks(values)
+    fig3.set_xticklabels(EMOTIONS, rotation=30)
+
+    plt.tight_layout()
+    plt.show()
+
+global  start_time, vertices
 # Time for displaying FPS in seconds
 one_seg = 5 # displays the frame rate every second
 
@@ -29,8 +100,9 @@ model_input_size = (48,48)
 # hyper-parameters for bounding boxes shape
 # loading models
 # segmentate = False
-report_emotion = []
+emotions_map = []
 report_time = []
+affectogram =[]
 
 video_source = 'webcam'   ## OPTIONS 'webcam' and 'video_file'
 file_name = 'EvaluationSession'
@@ -61,6 +133,7 @@ elif video_source == 'video_file':
     video_capture = FileVideoStream(video_path).start()
     frame_size = np.shape(video_capture.read())
     time.sleep(2.0)
+    duration = FFProbe(video_path).streams[0].duration
 
 if save_processed_video:
     out = cv2.VideoWriter('./processed_videos/%s_processed.avi'%file_name, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (int(frame_size[1]*(0.33+1)), frame_size[0])) #'M', 'J', 'P', 'G'
@@ -104,12 +177,14 @@ while True:
         break
     # reading the frame
 
+    frame = imutils.resize(frame, height=250)
     height, width, _ = np.shape(frame)
-    # frame = imutils.resize(frame, height=height)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     try: faces = detector.CNN_face_detection(frame, 0.7)
-    except ValueError: faces = []; pass
+    except ValueError:
+        faces = []
+        pass
 
     canvas = np.zeros((height, int(width*0.33), 3), dtype="uint8")
 
@@ -158,9 +233,10 @@ while True:
 
                 preds = emotion_classifier.predict(roi)[0]  # send model to perform emotion recognition
                 label = EMOTIONS[preds.argmax()]
-                report_emotion.append(preds)
+                emotions_map.append(preds)
+                affectogram.append(preds.argmax())
                 fps.stop()
-                report_time.append(fps.elapsed())
+
         # if segmentate:
         #     # Detect eyes and mouth in the detected faces
         #     eyes_roiBB = [0, int(h / 4), w, int(h / 4)]
@@ -205,49 +281,38 @@ while True:
                                 (255, 255, 255), 2)
                     cv2.putText(frameClone, label, (x, y - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    else:
+        emotions_map.append(np.zeros(7))
+        affectogram.append(7)
 
     fps.update()
     fps.stop()
 
     procesed = np.hstack((frameClone, canvas))
-    print(np.shape(procesed))
 
     if save_processed_video: out.write(procesed)
 
     # resized = cv2.resize(procesed, (1870,1030))
     if show_processing: cv2.imshow('procesed', procesed)
-    # print(np.shape(procesed))
-    # cv2.imshow('your_face', frameClone)
-    # cv2.imshow("your_emotions", canvas)
-
 
     if int(fps.elapsed()) % one_seg == 0:
         #print("[INFO] approx. time: {:.2f}".format(fps.elapsed()))
         print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
-
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         fps.stop()
         print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
         break
 
+if video_source == 'webcam':
+    duration = fps.elapsed()
+
 video_capture.stop()
 # cv2.destroyAllWindows()
 time.sleep(1.0)
 
+generate_emotion_report(emotions_map,affectogram, duration)
 
-from matplotlib.cm import get_cmap
-colors = ['b', 'r', 'y', 'g', 'purple',' ']
-cmap = get_cmap("jet")
-emotion_array= np.asarray(report_emotion)
-time_array = np.asanyarray(report_time)
-# sns.heatmap(np.transpose(emotion_array), yticklabels=EMOTIONS, xticklabels=False)
-# plt.hea(report_time, report_emotion)
-# plt.show()
-
-plt.imshow(emotion_array, vmin=0, vmax=max(len(colors), 6),
-          cmap=cmap, interpolation="nearest", aspect="auto")
-plt.show()
 
 
 
